@@ -1,0 +1,12 @@
+{
+  "name": "usage-panel",
+  "displayName": "Usage Panel",
+  "version": "0.1.0",
+  "description": "A pane that shows what your Claude Code usage costs: spend, pace, token mix, forecast, and your plan's 5-hour and weekly limits with a chart of the week.",
+  "author": {
+    "name": "Siigari"
+  },
+  "homepage": "https://github.com/Siigari/usage-panel",
+  "repository": "https://github.com/Siigari/usage-panel",
+  "license": "MIT"
+}

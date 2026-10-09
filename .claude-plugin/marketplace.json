@@ -1,0 +1,14 @@
+{
+  "name": "siigari",
+  "owner": {
+    "name": "Siigari"
+  },
+  "description": "Siigari's Claude Code plugins",
+  "plugins": [
+    {
+      "name": "usage-panel",
+      "source": "./",
+      "description": "A pane that shows what your Claude Code usage costs and where your plan's week is heading."
+    }
+  ]
+}
