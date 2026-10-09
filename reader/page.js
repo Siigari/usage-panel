@@ -200,25 +200,23 @@ function client(R) {
 
   // ---------- the plan week ----------
   let drawWeek = null
-  if (lastPlan && lastPlan[2] != null && lastPlan[4]) {
-    const r7 = lastPlan[4], start = r7 - 7 * 86400, now = R.generatedAt, u7 = lastPlan[2]
+  if (R.week) {
+    const { r7, start, u7 } = R.week, now = R.generatedAt
     const rec = R.plan.filter((p) => p[4] === r7 && p[2] != null).map((p) => [p[0], p[2]])
-    const weekPace = u7 / Math.max(900, now - start)
-    const recent = rec.filter((p) => p[0] > now - 3 * 3600)
-    const recentPace = recent.length > 1 && recent[recent.length - 1][0] - recent[0][0] > 2700 ? (recent[recent.length - 1][1] - recent[0][1]) / (recent[recent.length - 1][0] - recent[0][0]) : null
+    const weekPace = R.week.week, recentPace = R.week.three
     const atReset = (p) => u7 + p * (r7 - now)
     const fullAt = (p) => (p > 0 && u7 + p * (r7 - now) >= 100 ? now + (100 - u7) / p : null)
     const notes = [
       [C.text, `now ${Math.round(u7)}% · even pace ${Math.round(((now - start) / (7 * 86400)) * 100)}%`],
       [C.amber, `week pace → ${Math.round(atReset(weekPace))}% at reset${fullAt(weekPace) ? ' (full ' + dayHour(fullAt(weekPace)) + ')' : ''}`],
     ]
-    if (recentPace != null) notes.push([C.red, `3h pace → ${Math.round(atReset(recentPace))}% at reset${fullAt(recentPace) ? ' (full ' + dayHour(fullAt(recentPace)) + ')' : ''}`])
+    if (recentPace != null) notes.push([C.red, `3h pace${R.week.estimated ? ' (est. from ' + money(R.week.last3hUsd) + ' spent)' : ''} → ${Math.round(atReset(recentPace))}% at reset${fullAt(recentPace) ? ' (full ' + dayHour(fullAt(recentPace)) + ')' : ''}`])
     notes.push([C.dim, 'resets ' + dayHour(r7)])
     app.append(el('section', { class: 'panel' },
       el('h2', null, 'This week', el('small', null, 'grey = even pace · white = recorded · dashed = forecast')),
       el('div', null, el('canvas', { id: 'week' })),
       el('div', { class: 'legend', style: 'margin-top:8px' }, notes.map(([c, s]) => el('span', { style: 'color:' + c }, s))),
-      rec.length < 2 ? el('div', { class: 'note' }, 'The recorded line fills in as the usage-panel mod saves readings during your sessions.') : null))
+      rec.length < 2 ? el('div', { class: 'note' }, 'The recorded line fills in as this report (each run, or every minute with --watch) and the /meter pane save plan readings. Until 45 minutes of readings fall in the last 3 hours, the 3h pace is estimated: the week’s percent per list-price dollar so far, times what the last 3 hours cost.') : null))
     drawWeek = () => {
       const cv = document.getElementById('week'), { g, w, h } = sizeCanvas(cv, 200)
       const top = Math.max(100, atReset(weekPace), recentPace != null ? atReset(recentPace) : 0) * 1.05

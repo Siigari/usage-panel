@@ -13,7 +13,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { scanAll, claudeHome } from './scan.js'
 import { evaluate } from './evaluate.js'
-import { savedPlan, livePlan } from './plan.js'
+import { savedPlan, livePlan, rememberPlan } from './plan.js'
 import { renderPage } from './page.js'
 
 const args = process.argv.slice(2)
@@ -29,6 +29,14 @@ function openInBrowser(file) {
   try { spawn(cmd, argv, { detached: true, stdio: 'ignore', shell: process.platform === 'win32', windowsVerbatimArguments: true }).unref() } catch {}
 }
 
+const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
+
+// Both sources by time, without repeats
+function mergePlan(a, b) {
+  const seen = new Set()
+  return [...a, ...b].sort((x, y) => x[0] - y[0]).filter((r) => { const k = r.join(','); if (seen.has(k)) return false; seen.add(k); return true })
+}
+
 async function run(first) {
   const t0 = Date.now()
   let last = 0
@@ -42,8 +50,13 @@ async function run(first) {
     },
   })
   if (first) process.stderr.write(`\r${scan.fileCount.toLocaleString('en-US')} transcripts (${(scan.bytes / 1e9).toFixed(1)} GB), ${scan.parsedNow.toLocaleString('en-US')} read now, in ${((Date.now() - t0) / 1000).toFixed(1)} s\n`)
-  const plan = savedPlan(home)
-  if (!flag('--offline')) { const live = await livePlan(home); if (live) plan.push(live) }
+  let plan = savedPlan(home)
+  if (!flag('--offline')) {
+    const live = await livePlan(home)
+    if (live) plan = mergePlan(plan, rememberPlan(path.join(dir, 'plan.json'), live))
+  } else {
+    plan = mergePlan(plan, readJson(path.join(dir, 'plan.json')) || [])
+  }
   const report = evaluate(scan.summaries, { plan })
   report.source = { transcripts: scan.fileCount, bytes: scan.bytes }
   if (flag('--json')) { process.stdout.write(JSON.stringify(report, null, 2) + '\n'); return }

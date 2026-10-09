@@ -51,6 +51,10 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
   const cold = { n: 0, usd: 0, recentN: 0, recentUsd: 0 }
   let fastUsd = 0, webN = 0, recentRead = 0, recentPrompt = 0, first = Infinity, last = 0
   const recentFrom = now - RECENT_DAYS * DAY
+  // The plan week, for pricing its pace: what this week and the last 3 hours cost at list prices
+  const lastPlan = plan.length ? plan[plan.length - 1] : null
+  const weekStart = lastPlan && lastPlan[4] ? lastPlan[4] - 7 * DAY : Infinity
+  let weekUsd = 0, last3hUsd = 0
 
   for (const f of files) {
     const proj = projectName(f.cwd)
@@ -71,6 +75,8 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
       first = Math.min(first, t); last = Math.max(last, t)
       tokens.input += r[3]; tokens.read += r[4]; tokens.write += r[5] + r[6]; tokens.output += r[7]; tokens.thinking += r[8]
       if (r[10]) fastUsd += c.total
+      if (t >= weekStart) weekUsd += c.total
+      if (t >= now - 3 * H) last3hUsd += c.total
       webN += r[9]
 
       const d = daily[dayOf(t)] || (daily[dayOf(t)] = kinds())
@@ -128,10 +134,31 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
     tools: Object.entries(tools).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n).slice(0, 25),
     compactions: sessionList.reduce((s, x) => s + x.compactions, 0),
     plan,
+    week: weekPace(plan, now, weekUsd, last3hUsd),
   }
   report.findings = findings(report, { recentCtx, recentAgents })
   report.grades = grades(report, { recentCtx, recentAgents })
   return report
+}
+
+// The week's two paces, in points per second. The 3-hour pace is measured from plan readings when they span at
+// least 45 of the last 180 minutes; otherwise it is estimated from spend: the points used per list-price dollar so
+// far this week, times what the last 3 hours cost.
+function weekPace(plan, now, weekUsd, last3hUsd) {
+  const last = plan.length ? plan[plan.length - 1] : null
+  if (!last || last[2] == null || !last[4]) return null
+  const u7 = last[2], r7 = last[4], start = r7 - 7 * DAY
+  const week = u7 / Math.max(900, now - start)
+  const recent = plan.filter((p) => p[4] === r7 && p[2] != null && p[0] > now - 3 * H)
+  let three = null, estimated = false
+  if (recent.length > 1 && recent[recent.length - 1][0] - recent[0][0] >= 2700) {
+    const a = recent[0], b = recent[recent.length - 1]
+    three = (b[2] - a[2]) / (b[0] - a[0])
+  } else if (weekUsd > 0 && u7 > 0) {
+    three = ((u7 / weekUsd) * last3hUsd) / (3 * H)
+    estimated = true
+  }
+  return { u7, r7, start, at: last[0], week, three, estimated, weekUsd, last3hUsd }
 }
 
 const money = (d) => '$' + (d >= 100 ? Math.round(d).toLocaleString('en-US') : d.toFixed(2))

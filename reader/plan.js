@@ -41,3 +41,16 @@ export async function livePlan(home) {
     return [Math.floor(Date.now() / 1000), five ? five.utilization : null, week ? week.utilization : null, sec(five && five.resets_at), sec(week && week.resets_at)]
   } catch { return null }
 }
+
+// The report keeps its own readings too, so a measured 3-hour pace and the week's recorded line build up even
+// without the /meter pane. Rows older than eight days are dropped.
+export function rememberPlan(file, row) {
+  let rows = []
+  try { rows = JSON.parse(fs.readFileSync(file, 'utf8')) } catch {}
+  const last = rows[rows.length - 1]
+  const same = last && last[1] === row[1] && last[2] === row[2] && last[4] === row[4]
+  if (!same || row[0] - last[0] >= 600) rows.push(row)
+  rows = rows.filter((r) => r[0] > row[0] - 8 * 86400)
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(rows)) } catch {}
+  return rows
+}

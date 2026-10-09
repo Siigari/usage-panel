@@ -51,7 +51,7 @@ The report grades the last 30 days on four things and lists what stands out, mos
 
 It also shows spend per day (stacked by reads, writes, input, and output), a weekday-by-hour heatmap, spend by project, model, and app, context size buckets, tool calls, and the 40 most expensive sessions.
 
-The plan percent on the report comes from the same account-usage call Claude Code's `/usage` screen makes, using the login Claude Code saved on this computer (`--offline` skips it). The week chart's recorded line comes from what the `/meter` pane saved.
+The plan percent on the report comes from the same account-usage call Claude Code's `/usage` screen makes, using the login Claude Code saved on this computer (`--offline` skips it). The week chart's recorded line comes from readings the report and the `/meter` pane save. Its red 3h pace is measured from those readings once they cover 45 minutes of the last 3 hours; until then it is estimated from spend (the week's percent per list-price dollar so far, times what the last 3 hours cost) and labeled "est."
 
 ## Where it shows
 
