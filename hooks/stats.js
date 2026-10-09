@@ -22,7 +22,7 @@ export function priceOf(model) {
   const m = String(model || '').toLowerCase()
   const hit = PRICES.find(([re]) => re.test(m))
   const p = hit ? hit[1] : FALLBACK
-  return { in: p.in, out: p.out, cr: p.cr ?? p.in * 0.1, cw: p.in * 2 }
+  return { in: p.in, out: p.out, cr: p.cr ?? p.in * 0.1, cw: p.in * 2, cw5: p.in * 1.25 }
 }
 
 // One request's dollars, split the way the panel shows them

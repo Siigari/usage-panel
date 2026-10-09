@@ -4,8 +4,8 @@ import { costOf, priceOf, summarize } from '../hooks/stats.js'
 const H = 3600
 
 test('prices follow the model family', async () => {
-  expect(priceOf('claude-opus-5-5')).toEqual({ in: 4, out: 20, cr: 0.2, cw: 8 })
-  expect(priceOf('claude-sonnet-5')).toEqual({ in: 2, out: 10, cr: 0.2, cw: 4 })
+  expect(priceOf('claude-opus-5-5')).toEqual({ in: 4, out: 20, cr: 0.2, cw: 8, cw5: 5 })
+  expect(priceOf('claude-sonnet-5')).toEqual({ in: 2, out: 10, cr: 0.2, cw: 4, cw5: 2.5 })
   expect(priceOf('claude-haiku-4-5-20251001').in).toBe(1)
   expect(priceOf('claude-fable-5-1').cr).toBe(0.25)
   // A million cache-read tokens on Opus 5 is fifty cents

@@ -1,8 +1,8 @@
 {
   "name": "usage-panel",
   "displayName": "Usage Panel",
-  "version": "0.1.0",
-  "description": "A pane that shows what your Claude Code usage costs: spend, pace, token mix, forecast, and your plan's 5-hour and weekly limits with a chart of the week.",
+  "version": "0.2.0",
+  "description": "A /meter pane with your spend, pace, token mix, forecast, and plan week, plus /meter web: a full report that reads every Claude Code transcript on this computer and evaluates your usage.",
   "author": {
     "name": "Siigari"
   },

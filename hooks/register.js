@@ -87,7 +87,7 @@ async function recordPlan($, rateLimits) {
 
 export function register(on) {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'meter', description: 'Open or close the usage panel', immediate: true })
+    await $.command.register({ name: 'meter', description: 'Open or close the usage panel; /meter web opens the full report', argumentHint: '[web]', immediate: true })
     await refresh($, true)
     $.clock.every(REFRESH_MS, () => {
       if (isOpen) refresh($, false).then(() => $.ui.invalidate('ui.render'))
@@ -113,7 +113,17 @@ export function register(on) {
     return next(e)
   })
 
-  on('command.run', { command: 'meter' }, async ($) => {
+  on('command.run', { command: 'meter' }, async ($, e) => {
+    if (String(e.args || '').trim() === 'web') {
+      $.ui.toast('Reading your Claude Code transcripts…')
+      try {
+        const r = await $.process.run(['node', $.plugin.root + '/reader/usage-reader.js'], { timeoutMs: 600000 })
+        if (r.exitCode === 0) return { text: 'Opened the usage report in your browser. ' + (r.stderr.trim().split('\n').pop() || '') }
+        return { text: 'The usage report failed:\n' + (r.stderr || r.stdout).trim().slice(-1500) }
+      } catch {
+        return { text: 'The usage report needs Node.js 18 or newer (nodejs.org). With Node installed, `npx github:Siigari/usage-panel` runs it too.' }
+      }
+    }
     const panes = await $.ui.panes()
     if (panes.some((p) => p.id === PANE)) {
       await $.ui.close({ id: PANE })
