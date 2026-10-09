@@ -80,6 +80,13 @@ td .title { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-s
 td .muted { color: var(--dim); font-size: 12px; }
 #tip { position: fixed; pointer-events: none; background: #1f2630; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: 12px/1.5 var(--mono); color: var(--text); z-index: 10; white-space: pre; }
 .note { color: var(--dim); font-size: 12px; margin-top: 8px; }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 28px; font: 13px/1.6 var(--mono); padding: 14px 16px; margin-top: 16px; }
+.strip h3 { font: 600 12px/1 var(--mono); color: var(--blue); letter-spacing: .06em; margin: 0 0 6px; }
+.strip h3 small { color: var(--dim); font-weight: 400; letter-spacing: 0; margin-left: 6px; }
+.strip .row { display: flex; justify-content: space-between; gap: 12px; }
+.strip .row span:first-child { color: var(--muted); }
+.strip .row span:last-child { white-space: nowrap; }
+.strip .meter { margin: 2px 0 4px; height: 4px; }
 `
 
 // Runs in the browser. It must stay self-contained: it is copied into the page as source text.
@@ -117,6 +124,44 @@ function client(R) {
   ))
 
   const lastPlan = R.plan.length ? R.plan[R.plan.length - 1] : null
+
+  // ---------- the live strip ----------
+  if (R.live) {
+    const L = R.live, money2 = (d) => '$' + (d < 1 ? d.toFixed(3) : d.toFixed(2))
+    const row = (k, v, color) => el('div', { class: 'row' }, el('span', null, k), el('span', color ? { style: 'color:' + color } : null, v))
+    const block = (title, note, rows) => el('div', null, el('h3', null, title, note ? el('small', null, note) : null), rows)
+    const share = (v) => (L.mix.total ? Math.round((v / L.mix.total) * 100) + '%' : '–')
+    const clock = (s) => new Date(s * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    const dayClock = (s) => new Date(s * 1000).toLocaleString(undefined, { weekday: 'short', hour: 'numeric' })
+    const bar = (p) => el('div', { class: 'meter' }, el('i', { style: `width:${Math.min(100, p || 0)}%;background:${p >= 90 ? C.red : p >= 67 ? C.amber : '#3fb950'}` }))
+    const ctx = L.forecast.context
+    const blocks = [
+      block('SPEND', 'list $', [
+        row('5m', `${money2(L.spend.m5.usd)} · ${L.spend.m5.n} req`), row('30m', `${money2(L.spend.m30.usd)} · ${L.spend.m30.n} req`),
+        row('1h', `${money2(L.spend.h1.usd)} · ${L.spend.h1.n} req`), row('today', `${money2(L.spend.today.usd)} · ${L.spend.today.n} req`)]),
+      block('PRESSURE', '', [
+        row('now', money2(L.pressure.nowPerHour) + '/h'), row('1h pace', money2(L.pressure.hourPace) + '/h'),
+        row('req/h', String(L.pressure.reqPerHour)), row('cache hit', L.pressure.cacheHit == null ? '–' : Math.round(L.pressure.cacheHit * 100) + '%')]),
+      block('TODAY\u2019S MIX', '', [
+        row('reads', `${money2(L.mix.reads)} · ${share(L.mix.reads)}`), row('writes', `${money2(L.mix.writes)} · ${share(L.mix.writes)}`),
+        row('input', `${money2(L.mix.input)} · ${share(L.mix.input)}`), row('output', `${money2(L.mix.output)} · ${share(L.mix.output)}`)]),
+      block('FORECAST', '', [
+        row('end of day', '~' + money2(L.forecast.endOfDay)), row('next 24h', '~' + money2(L.forecast.next24h)),
+        row('context', ctx ? `${tok(ctx.tokens)} / ${tok(ctx.window)}` : '–'),
+        row('full in', ctx && ctx.fullIn != null ? '~' + ctx.fullIn.toFixed(1) + ' h' : '–')]),
+    ]
+    if (lastPlan) {
+      const W = R.week, pace = W ? (W.three != null ? W.three : W.week) : null
+      const fullAt = W && pace > 0 && W.u7 + pace * (W.r7 - R.generatedAt) >= 100 ? R.generatedAt + (100 - W.u7) / pace : null
+      blocks.push(block('PLAN', 'whole account', [
+        row('5-hour', `${lastPlan[1] == null ? '–' : Math.round(lastPlan[1]) + '%'}  ↻ ${lastPlan[3] ? clock(lastPlan[3]) : '–'}`), bar(lastPlan[1]),
+        row('weekly', `${lastPlan[2] == null ? '–' : Math.round(lastPlan[2]) + '%'}  ↻ ${lastPlan[4] ? dayClock(lastPlan[4]) : '–'}`), bar(lastPlan[2]),
+        row('forecast', fullAt ? 'full ' + dayClock(fullAt) : W ? 'lasts to reset' : '–', fullAt ? C.amber : null)]))
+    }
+    const stripEl = el('section', { class: 'panel strip' }, blocks)
+    if (ctx && ctx.title) stripEl.title = 'context: ' + ctx.title
+    app.append(stripEl)
+  }
   const tile = (k, v, n, meter) => el('div', { class: 'panel tile' }, el('div', { class: 'k' }, k), el('div', { class: 'v' }, v), n ? el('div', { class: 'n' }, n) : null,
     meter != null ? el('div', { class: 'meter' }, el('i', { style: `width:${Math.min(100, meter)}%;background:${meter >= 90 ? C.red : meter >= 67 ? C.amber : '#3fb950'}` })) : null)
   const tiles = [
@@ -124,10 +169,6 @@ function client(R) {
     tile(`Last ${R.recent.days} days`, money(R.recent.total), `${num(R.recent.n)} requests · ${money(R.recent.total / R.recent.days)}/day`),
     tile('Busiest day', (() => { const b = [...R.daily].sort((a, b) => b.total - a.total)[0]; return b ? money(b.total) : '–' })(), (() => { const b = [...R.daily].sort((a, b) => b.total - a.total)[0]; return b ? new Date(b.day + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '' })()),
   ]
-  if (lastPlan) {
-    if (lastPlan[1] != null) tiles.push(tile('Plan · 5-hour', Math.round(lastPlan[1]) + '%', lastPlan[3] ? 'resets ' + dayHour(lastPlan[3]) : '', lastPlan[1]))
-    if (lastPlan[2] != null) tiles.push(tile('Plan · week', Math.round(lastPlan[2]) + '%', lastPlan[4] ? 'resets ' + dayHour(lastPlan[4]) : '', lastPlan[2]))
-  }
   app.append(el('section', { class: 'grid tiles' }, tiles))
 
   // ---------- evaluation ----------

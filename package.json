@@ -1,6 +1,6 @@
 {
   "name": "usage-panel",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Claude Code usage: a /meter pane (mod) and a full report from every transcript on this computer",
   "type": "module",
   "bin": { "usage-reader": "reader/usage-reader.js" },

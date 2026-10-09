@@ -55,6 +55,11 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
   const lastPlan = plan.length ? plan[plan.length - 1] : null
   const weekStart = lastPlan && lastPlan[4] ? lastPlan[4] - 7 * DAY : Infinity
   let weekUsd = 0, last3hUsd = 0
+  // The live strip at the top: rolling windows, today's mix, and the newest main session's context
+  const dayStart = (() => { const d = new Date(now * 1000); d.setHours(0, 0, 0, 0); return d.getTime() / 1000 })()
+  const live = { m5: kinds(), m30: kinds(), h1: kinds(), today: kinds(), h1Read: 0, h1Prompt: 0 }
+  let newest = null
+  const hourCtx = {}   // session -> [firstT, firstCtx, lastT, lastCtx] over the last hour, main conversation only
 
   for (const f of files) {
     const proj = projectName(f.cwd)
@@ -77,6 +82,19 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
       if (r[10]) fastUsd += c.total
       if (t >= weekStart) weekUsd += c.total
       if (t >= now - 3 * H) last3hUsd += c.total
+      if (t >= dayStart) addKinds(live.today, c)
+      if (t > now - H) {
+        addKinds(live.h1, c)
+        live.h1Read += r[4]; live.h1Prompt += r[3] + r[4] + r[5] + r[6]
+        if (t > now - 1800) addKinds(live.m30, c)
+        if (t > now - 300) addKinds(live.m5, c)
+        if (!f.isAgent) {
+          const hc = hourCtx[f.session]
+          if (!hc) hourCtx[f.session] = [t, ctxOf(r), t, ctxOf(r)]
+          else if (t >= hc[2]) { hc[2] = t; hc[3] = ctxOf(r) }
+        }
+      }
+      if (!f.isAgent && (!newest || t > newest.t)) newest = { t, ctx: ctxOf(r), model: r[2], session: f.session }
       webN += r[9]
 
       const d = daily[dayOf(t)] || (daily[dayOf(t)] = kinds())
@@ -136,9 +154,32 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
     plan,
     week: weekPace(plan, now, weekUsd, last3hUsd),
   }
+  report.live = liveStrip(live, newest, hourCtx, sessions, now, dayStart)
   report.findings = findings(report, { recentCtx, recentAgents })
   report.grades = grades(report, { recentCtx, recentAgents })
   return report
+}
+
+// The strip at the top of the report, the same five blocks as the /meter pane
+function liveStrip(live, newest, hourCtx, sessions, now, dayStart) {
+  const pick = (k) => ({ usd: k.total, n: k.n })
+  const hourPace = live.h1.total
+  let context = null
+  if (newest) {
+    // The window: 200K on Haiku 4.5 and older Haiku, 1M on everything current
+    const window = /haiku-(3|4)/.test(newest.model) ? 200000 : 1000000
+    let fullIn = null
+    const hc = hourCtx[newest.session]
+    if (hc && hc[2] - hc[0] >= 360 && hc[3] > hc[1]) fullIn = (window - newest.ctx) / ((hc[3] - hc[1]) / ((hc[2] - hc[0]) / H))
+    const s = sessions[newest.session]
+    context = { tokens: newest.ctx, window, fullIn, at: newest.t, title: (s && s.title) || '' }
+  }
+  return {
+    spend: { m5: pick(live.m5), m30: pick(live.m30), h1: pick(live.h1), today: pick(live.today) },
+    pressure: { nowPerHour: live.m5.total * 12, hourPace, reqPerHour: live.h1.n, cacheHit: live.h1Prompt ? live.h1Read / live.h1Prompt : null },
+    mix: { reads: live.today.reads, writes: live.today.writes, input: live.today.input, output: live.today.output, total: live.today.total },
+    forecast: { endOfDay: live.today.total + hourPace * ((dayStart + DAY - now) / H), next24h: hourPace * 24, context },
+  }
 }
 
 // The week's two paces, in points per second. The 3-hour pace is measured from plan readings when they span at
