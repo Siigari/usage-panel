@@ -5,6 +5,20 @@ Two ways to see what your Claude Code usage costs:
 - **`/meter`**: a pane inside Claude Code with your spend, pace, token mix, forecast, and plan week, live as you work.
 - **`/meter web`**: a full report in your browser. It reads every Claude Code transcript on your computer, back to the oldest one Claude Code kept, and evaluates your habits: cache hits, cold restarts, context size, subagents, models, projects, the hours you work, your most expensive sessions, and the tools Claude calls most.
 
+![The report: the live strip, totals, and the evaluation with letter grades and findings](docs/report-top.png)
+
+![Spend per day stacked by reads, writes, input, and output, and the plan week with even pace, recorded use, and two forecasts](docs/report-charts.png)
+
+![Spend by weekday and hour, projects, models, apps and agents, context size, and tools](docs/report-breakdown.png)
+
+![The most expensive sessions, with requests, max context, compactions, subagent spend, and cold restarts](docs/report-sessions.png)
+
+<sub>Screenshots use the made-up history from `--demo`. Run `npx github:Siigari/usage-panel --demo` to see it yourself.</sub>
+
+## The /meter pane
+
+Type `/meter` in a session for this pane beside the conversation:
+
 ```
 SPEND list $                PRESSURE                   TODAY'S MIX                FORECAST                   PLAN whole account
 5m       $1.19 · 10 req     now          $14.33/h      reads     $76.52 · 72%     end of day     ~$149.47    5-hour     12%  ↻ 11:20 PM
@@ -38,7 +52,7 @@ Restart Claude Code (or run `/reload-plugins`), then type **`/meter`** to open t
 
 ## The full report
 
-`/meter web` (or `npx github:Siigari/usage-panel` from any shell, no install) reads `~/.claude/projects/`, writes `~/.claude/usage-reader/report.html`, and opens it. It needs Node.js 18 or newer.
+`/meter web` (or `npx github:Siigari/usage-panel` from any shell, no install) reads `~/.claude/projects/`, writes `~/.claude/usage-reader/report.html`, and opens it. It needs Node.js 18 or newer. `--demo` shows the report with a made-up history instead of yours.
 
 The first run reads everything (about 10 seconds for 12 GB of transcripts); after that only the sessions that changed are reread. `npx github:Siigari/usage-panel --watch` keeps it fresh: it rescans every minute and the page reloads itself.
 

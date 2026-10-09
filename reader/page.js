@@ -62,8 +62,8 @@ canvas { display: block; width: 100%; }
 .toggle { float: right; display: flex; gap: 4px; }
 .toggle button { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 2px 10px; font: 12px var(--mono); cursor: pointer; }
 .toggle button[aria-pressed="true"] { color: var(--text); border-color: var(--blue); }
-.bars { display: grid; gap: 6px; }
-.bar { display: grid; grid-template-columns: minmax(80px, 34%) 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+.bars { display: grid; grid-template-columns: minmax(80px, 34%) 1fr auto; gap: 6px 10px; align-items: center; font-size: 13px; }
+.bar { display: contents; }
 .bar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar .track { height: 10px; background: var(--line); border-radius: 3px; overflow: hidden; }
 .bar .track i { display: block; height: 100%; background: var(--blue); }
@@ -94,6 +94,8 @@ function client(R) {
   const C = { reads: '#58a6ff', writes: '#f0883e', input: '#a371f7', output: '#3fb950', web: '#8b949e', line: '#30363d', dim: '#6e7681', muted: '#8b949e', text: '#e6edf3', amber: '#d29922', red: '#f85149', white: '#ffffff' }
   const KINDS = ['reads', 'writes', 'input', 'output']
   const app = document.getElementById('app'), tip = document.getElementById('tip')
+  // Each top-level block carries its name, so #only=strip,week shows just those
+  const add = (name, node) => { node.dataset.s = name; app.append(node) }
   const el = (tag, attrs, ...kids) => {
     const n = document.createElement(tag)
     for (const [k, v] of Object.entries(attrs || {})) { if (k === 'class') n.className = v; else if (k === 'style') n.style.cssText = v; else n.setAttribute(k, v) }
@@ -118,7 +120,7 @@ function client(R) {
 
   // ---------- header ----------
   const t = R.totals
-  app.append(el('header', null,
+  add('header', el('header', null,
     el('h1', null, 'Claude Usage'),
     el('div', { class: 'sub' }, `${date(R.range.first)} – ${date(R.range.last)} · ${num(t.n)} requests · ${num(t.sessions)} sessions · ${num(t.projects)} projects · priced at API list rates`),
   ))
@@ -160,7 +162,7 @@ function client(R) {
     }
     const stripEl = el('section', { class: 'panel strip' }, blocks)
     if (ctx && ctx.title) stripEl.title = 'context: ' + ctx.title
-    app.append(stripEl)
+    add('strip', stripEl)
   }
   const tile = (k, v, n, meter) => el('div', { class: 'panel tile' }, el('div', { class: 'k' }, k), el('div', { class: 'v' }, v), n ? el('div', { class: 'n' }, n) : null,
     meter != null ? el('div', { class: 'meter' }, el('i', { style: `width:${Math.min(100, meter)}%;background:${meter >= 90 ? C.red : meter >= 67 ? C.amber : '#3fb950'}` })) : null)
@@ -169,10 +171,10 @@ function client(R) {
     tile(`Last ${R.recent.days} days`, money(R.recent.total), `${num(R.recent.n)} requests · ${money(R.recent.total / R.recent.days)}/day`),
     tile('Busiest day', (() => { const b = [...R.daily].sort((a, b) => b.total - a.total)[0]; return b ? money(b.total) : '–' })(), (() => { const b = [...R.daily].sort((a, b) => b.total - a.total)[0]; return b ? new Date(b.day + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '' })()),
   ]
-  app.append(el('section', { class: 'grid tiles' }, tiles))
+  add('tiles', el('section', { class: 'grid tiles' }, tiles))
 
   // ---------- evaluation ----------
-  app.append(el('section', { class: 'panel' },
+  add('evaluation', el('section', { class: 'panel' },
     el('h2', null, 'Evaluation', el('small', null, `last ${R.recent.days} days`)),
     el('div', { class: 'grid grades' }, R.grades.map((g) => el('div', { class: 'grade' },
       el('b', { class: 'g' + g.grade }, g.grade),
@@ -189,7 +191,7 @@ function client(R) {
   spendPanel.append(el('h2', null, 'Spend per day', toggle),
     el('div', { class: 'legend' }, KINDS.map((k) => el('span', null, el('i', { style: 'background:' + C[k] }), k))),
     el('div', null, el('canvas', { id: 'daily' })))
-  app.append(spendPanel)
+  add('daily', spendPanel)
   let range = 30
   for (const [label, days] of [['30d', 30], ['90d', 90], ['All', 0]]) {
     const b = el('button', { 'aria-pressed': String(days === range) }, label)
@@ -253,7 +255,7 @@ function client(R) {
     ]
     if (recentPace != null) notes.push([C.red, `3h pace${R.week.estimated ? ' (est. from ' + money(R.week.last3hUsd) + ' spent)' : ''} → ${Math.round(atReset(recentPace))}% at reset${fullAt(recentPace) ? ' (full ' + dayHour(fullAt(recentPace)) + ')' : ''}`])
     notes.push([C.dim, 'resets ' + dayHour(r7)])
-    app.append(el('section', { class: 'panel' },
+    add('week', el('section', { class: 'panel' },
       el('h2', null, 'This week', el('small', null, 'grey = even pace · white = recorded · dashed = forecast')),
       el('div', null, el('canvas', { id: 'week' })),
       el('div', { class: 'legend', style: 'margin-top:8px' }, notes.map(([c, s]) => el('span', { style: 'color:' + c }, s))),
@@ -303,19 +305,19 @@ function client(R) {
       el('div', { class: 'val' }, r.label))))
   }
   const share = (v) => (t.total ? ' · ' + pct(v / t.total) : '')
-  app.append(el('section', { class: 'grid two' },
+  add('when', el('section', { class: 'grid two' },
     el('div', { class: 'panel' }, el('h2', null, 'When', el('small', null, 'spend by weekday and hour, all time')), heat),
     el('div', { class: 'panel' }, el('h2', null, 'Projects', el('small', null, 'all time')),
       barList(R.projects.slice(0, 12).map((p) => ({ name: p.name, v: p.usd, label: money(p.usd) + share(p.usd) })))),
   ))
-  app.append(el('section', { class: 'grid two' },
+  add('models', el('section', { class: 'grid two' },
     el('div', { class: 'panel' }, el('h2', null, 'Models'), barList(R.models.slice(0, 8).map((m) => ({ name: m.name, v: m.usd, label: money(m.usd) + share(m.usd) })), '#a371f7')),
     el('div', { class: 'panel' }, el('h2', null, 'Apps and agents'),
       barList([...R.apps.map((a) => ({ name: a.name, v: a.usd, label: money(a.usd) + share(a.usd) })),
         { name: 'main conversations', v: R.agents.main, label: money(R.agents.main) + share(R.agents.main) },
         { name: 'subagents', v: R.agents.sub, label: money(R.agents.sub) + share(R.agents.sub) }], '#3fb950')),
   ))
-  app.append(el('section', { class: 'grid two' },
+  add('context', el('section', { class: 'grid two' },
     el('div', { class: 'panel' }, el('h2', null, 'Context size', el('small', null, 'what each request carried, all time')),
       barList(R.ctx.map((c) => ({ name: c.name, v: c.usd, label: `${money(c.usd)} · ${num(c.n)} req · ${c.n ? money(c.usd / c.n) : '–'} each` })), '#f0883e'),
       el('div', { class: 'note' }, `${num(R.compactions)} compactions · ${num(R.cold.n)} cold restarts costing ${money(R.cold.usd)} extra`)),
@@ -333,15 +335,18 @@ function client(R) {
     el('td', { class: 'num' }, s.subUsd > 0.005 ? money(s.subUsd) : ''),
     el('td', { class: 'num' }, s.cold > 0.005 ? money(s.cold) : ''),
     el('td', { class: 'num' }, money(s.usd))))
-  app.append(el('section', { class: 'panel' },
+  add('sessions', el('section', { class: 'panel' },
     el('h2', null, 'Most expensive sessions', el('small', null, `top ${R.sessions.length} of ${num(R.sessionCount)}`)),
     el('div', { class: 'scroll' }, el('table', null,
       el('thead', null, el('tr', null, el('th', null, 'Session'), el('th', { class: 'num' }, 'Started'), el('th', { class: 'num' }, 'Requests'), el('th', { class: 'num' }, 'Max context'), el('th', { class: 'num' }, 'Compactions'), el('th', { class: 'num' }, 'Subagents'), el('th', { class: 'num' }, 'Cold restarts'), el('th', { class: 'num' }, 'Total'))),
       el('tbody', null, rows)))))
 
-  app.append(el('div', { class: 'note' }, `Generated ${new Date(R.generatedAt * 1000).toLocaleString()} from Claude Code's transcripts on this computer. Dollars are API list prices (cache writes at their 5-minute or 1-hour rate, fast mode at 2×); on a Pro or Max plan they compare habits, they are not a bill.`))
+  add('footer', el('div', { class: 'note' }, `Generated ${new Date(R.generatedAt * 1000).toLocaleString()} from Claude Code's transcripts on this computer. Dollars are API list prices (cache writes at their 5-minute or 1-hour rate, fast mode at 2×); on a Pro or Max plan they compare habits, they are not a bill.`))
 
-  const draw = () => { drawDaily(); if (drawWeek) drawWeek() }
+  const only = window.ONLY || new URLSearchParams(location.hash.slice(1)).get('only')
+  if (only) { const keep = only.split(','); for (const n of [...app.children]) if (!keep.includes(n.dataset.s)) n.remove() }
+
+  const draw = () => { if (document.getElementById('daily')) drawDaily(); if (drawWeek && document.getElementById('week')) drawWeek() }
   draw()
   addEventListener('resize', draw)
 }

@@ -1,7 +1,7 @@
 {
   "name": "usage-panel",
   "displayName": "Usage Panel",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A /meter pane with your spend, pace, token mix, forecast, and plan week, plus /meter web: a full report that reads every Claude Code transcript on this computer and evaluates your usage.",
   "author": {
     "name": "Siigari"
