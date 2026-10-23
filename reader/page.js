@@ -87,6 +87,12 @@ td .muted { color: var(--dim); font-size: 12px; }
 .strip .row span:first-child { color: var(--muted); }
 .strip .row span:last-child { white-space: nowrap; }
 .strip .meter { margin: 2px 0 4px; height: 4px; }
+.panel h3 { font: 600 12px/1 var(--mono); color: var(--muted); margin: 16px 0 8px; }
+.panel h3 small { color: var(--dim); font-weight: 400; margin-left: 6px; }
+.panel > .grid .row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 2px 0; }
+.panel > .grid .row span:first-child { color: var(--muted); }
+.panel .tiles { margin: 0 0 8px; }
+.panel .tiles .tile .v { font-size: 18px; }
 `
 
 // Runs in the browser. It must stay self-contained: it is copied into the page as source text.
@@ -184,6 +190,55 @@ function client(R) {
       el('div', null, el('div', { class: 't' }, f.title), el('div', { class: 'd' }, f.detail)),
       el('div', { class: 'u' }, f.usd > 0.005 ? money(f.usd) : '')))),
   ))
+
+  // ---------- where it went / what would have saved it (0.3) ----------
+  const S = R.savings
+  if (S && S.spend) {
+    const F = S.facts, E = S.estimates, A = S.assume
+    const sp = (v) => pct(v / S.spend)
+    const kv = (k, v) => el('div', { class: 'row' }, el('span', null, k), el('span', null, v))
+    const facts = el('div', { class: 'grid two' },
+      el('div', null,
+        el('h3', null, 'Context size', el('small', null, 'spend by what each request carried')),
+        barList(F.bands.map((b) => ({ name: b.name, v: b.usd, label: `${money(b.usd)} · ${sp(b.usd)} · ${num(b.n)} req` })), '#f0883e'),
+        el('h3', null, 'Round trips', el('small', null, `${pct(F.trips.share)} of requests handed a tool result back · ${money(F.trips.usd)}`)),
+        barList(F.trips.byTool.slice(0, 8).map((x) => ({ name: x.name, v: x.usd, label: `${money(x.usd)} · ${num(x.n)}` })), '#58a6ff')),
+      el('div', null,
+        el('h3', null, 'Pure overhead'),
+        kv('"done" requests', `${num(F.done.n)} · ${money(F.done.usd)}`),
+        kv('requests by cause', `${num(F.kinds.prompts)} prompts · ${num(F.kinds.results)} tool results · ${num(F.kinds.beats)} hook beats`),
+        F.beats.n ? kv('Stop-hook beats', `${num(F.beats.n)}${F.beats.copies ? ` · ${num(F.beats.copies)} sent twice · ${money(F.beats.copyUsd)}` : ''}`) : null,
+        F.prefix ? kv('a fresh session starts at', `~${tok(F.prefix.median)} before you type`) : null,
+        kv('forks (reread their parent)', F.forks.n ? `${num(F.forks.n)} req · ${money(F.forks.usd)}` : 'none seen'),
+        kv('other subagents', `${num(F.subs.n)} req · ${money(F.subs.usd)}`),
+        el('h3', null, 'Results that rode along', el('small', null, 'size × the requests that reread it')),
+        el('div', { class: 'bars' }, F.riders.slice(0, 10).map((x) => el('div', { class: 'bar', title: x.label || '' },
+          el('div', { class: 'name' }, x.label ? `${x.tool} · ${x.label}` : x.tool),
+          el('div', { class: 'track' }, el('i', { style: `width:${(x.usd / Math.max(1e-9, F.riders[0].usd)) * 100}%;background:#d29922` })), el('div', { class: 'val' }, `${tok(x.tokens)} × ${num(x.rides)} = ${money(x.usd)}`))))),
+    )
+    const card = (title, value, lines) => el('div', { class: 'panel tile' }, el('div', { class: 'k' }, title), el('div', { class: 'v' }, value), lines.map((l) => el('div', { class: 'n' }, l)))
+    const best = E.cap.slice().sort((a, b) => b.usd - a.usd)[0]
+    // An estimate can come out negative (its costs beat its savings): say so plainly
+    const est = (usd, share) => usd >= 0 ? `${money(usd)} · ${pct(share)}` : `costs ${money(-usd)} more`
+    const cards = el('section', { class: 'grid tiles' },
+      card('A context cap', best ? est(best.usd, best.share) : '–', [
+        'At ' + E.cap.map((c) => `${tok(c.cap)}: ${pct(c.share)}`).join(' · '),
+        `Compact back to ~${tok(A.capSummary)} whenever a session passes the cap. ${best ? `${num(best.compactions)} compactions at ${tok(best.cap)}.` : ''}`,
+        `Counts each compaction's ~${tok(A.capSummaryOut)} summary and rewriting the new start. Every compaction trades detail for a summary.`]),
+      card('Fewer round trips', est(E.quill.usd, E.quill.share), [
+        `${num(E.quill.removed)} requests came right after a step that only acted (an edit, a write, a commit${E.quill.agentFiles ? ', a message sent' : ''}) and needed no result: ${money(E.quill.trips)}. The rest stop carrying ~${tok(A.toolDefs - A.grammar)} of tool definitions: ${money(E.quill.defs)}.`,
+        `Sessions read as coding: ${num(E.quill.codeFiles)}; as agents living in a hook loop: ${num(E.quill.agentFiles)}.`]),
+      card('Drying old results', est(E.seam.usd, E.seam.share), [
+        `Tool results and big inputs from finished turns shrink to a stub: ${money(E.seam.saved)} fewer rereads.`,
+        `Minus rewriting the cache after each dried point (${money(E.seam.rewrite)}) and ${pct(A.reread)} of dried reads coming back once (${money(E.seam.reread)}).`]),
+    )
+    add('savings', el('section', { class: 'panel' },
+      el('h2', null, 'Where it went', el('small', null, `last ${R.recent.days} days · ${pct(F.over300)} of spend happened while a session carried more than 300K`)),
+      facts,
+      el('h2', { style: 'margin-top:18px' }, 'What would have saved it', el('small', null, 'estimates, each replaying the same requests with one change')),
+      cards,
+      el('div', { class: 'note' }, 'These estimates go after the same rereads, so they overlap: don’t add them up.')))
+  }
 
   // ---------- spend over time ----------
   const spendPanel = el('section', { class: 'panel' })
@@ -297,7 +352,7 @@ function client(R) {
   }
 
   // ---------- where it goes ----------
-  const barList = (rows, color) => {
+  function barList(rows, color) {   // a declaration, so sections above it can use it
     const max = Math.max(1e-9, ...rows.map((r) => r.v))
     return el('div', { class: 'bars' }, rows.map((r) => el('div', { class: 'bar', title: r.name },
       el('div', { class: 'name' }, r.name),

@@ -3,6 +3,7 @@
 
 import path from 'node:path'
 import { priceOf } from '../hooks/stats.js'
+import { savings } from './savings.js'
 
 const H = 3600, DAY = 86400
 const RECENT_DAYS = 30
@@ -59,6 +60,7 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
   const dayStart = (() => { const d = new Date(now * 1000); d.setHours(0, 0, 0, 0); return d.getTime() / 1000 })()
   const live = { m5: kinds(), m30: kinds(), h1: kinds(), today: kinds(), h1Read: 0, h1Prompt: 0 }
   let newest = null
+  const kept = []   // each file with its own requests, duplicates dropped: what savings.js replays
   const hourCtx = {}   // session -> [firstT, firstCtx, lastT, lastCtx] over the last hour, main conversation only
 
   for (const f of files) {
@@ -71,9 +73,12 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
     // The cache lives an hour when this transcript wrote 1-hour entries, otherwise five minutes
     const ttl = f.reqs.some((r) => r[6] > 0) ? H : 300
     let prevT = 0
+    const own = []
+    kept.push({ f, rows: own })
     for (const r of f.reqs) {
       if (seen.has(r[1])) continue
       seen.add(r[1])
+      own.push(r)
       const c = priceRow(r), t = r[0], isRecent = t >= recentFrom
       addKinds(all, c)
       if (isRecent) addKinds(recent, c)
@@ -155,6 +160,8 @@ export function evaluate(summaries, { now = Math.floor(Date.now() / 1000), plan 
     week: weekPace(plan, now, weekUsd, last3hUsd),
   }
   report.live = liveStrip(live, newest, hourCtx, sessions, now, dayStart)
+  report.savings = savings(kept, { from: recentFrom })
+  Object.defineProperty(report, 'kept', { value: kept })   // for --compare; not part of the page's data
   report.findings = findings(report, { recentCtx, recentAgents })
   report.grades = grades(report, { recentCtx, recentAgents })
   return report
@@ -271,6 +278,38 @@ function findings(r, { recentCtx, recentAgents }) {
 
   if (r.totals.fastUsd > 0) {
     out.push({ level: 'info', title: `Fast mode: ${money(r.totals.fastUsd)}`, detail: 'Fast mode runs the same model quicker at twice the price; /fast turns it off.', usd: r.totals.fastUsd })
+  }
+
+  // 0.3: where it went
+  const S = r.savings
+  if (S && S.spend) {
+    const F = S.facts
+    if (F.done.n) {
+      const top = F.done.byTool[0]
+      out.push({
+        level: F.done.usd / spend > 0.05 ? 'warn' : 'info',
+        title: `${F.done.n.toLocaleString('en-US')} requests only heard "done": ${money(F.done.usd)}`,
+        detail: `A tool result came back, Claude wrote under 60 tokens, and the turn ended. Each one reread the whole conversation to learn a step had worked${top ? `; most came after ${top.name}` : ''}. Steps that only act (a message sent, a file written) don't need their result handed back.`,
+        usd: F.done.usd,
+      })
+    }
+    if (F.beats.copies && F.beats.copyUsd > 0.01) {
+      out.push({
+        level: 'info',
+        title: `Stop-hook reasons went in twice: ${money(F.beats.copyUsd)}`,
+        detail: `${F.beats.copies.toLocaleString('en-US')} times a Stop hook blocked with a reason, Claude Code added it as "Stop hook feedback" and again as a reminder, and every later request reread both. A hook that returns additionalContext instead of a block adds it once.`,
+        usd: F.beats.copyUsd,
+      })
+    }
+    const rider = F.riders[0]
+    if (rider && rider.usd > 0.5) {
+      out.push({
+        level: 'info',
+        title: `One ${rider.tool} result rode along ${rider.rides.toLocaleString('en-US')} requests: ${money(rider.usd)}`,
+        detail: `A ${Math.round(rider.tokens / 1000)}K-token result stayed in its conversation and was reread by every request after it until a compaction or the end. Read a range or grep instead of a whole big file, and cap command output.`,
+        usd: rider.usd,
+      })
+    }
   }
 
   const order = { warn: 0, info: 1, good: 2 }

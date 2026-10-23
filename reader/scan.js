@@ -7,7 +7,7 @@ import path from 'node:path'
 import { Worker, isMainThread, parentPort } from 'node:worker_threads'
 import { parseFile } from './parse-file.js'
 
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2   // 0.3: rows grew (why each request happened, what would have saved it)
 
 export function claudeHome() {
   return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')

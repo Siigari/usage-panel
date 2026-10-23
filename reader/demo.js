@@ -90,7 +90,29 @@ export function demoSummaries(now = Math.floor(Date.now() / 1000)) {
   }
   live.first = live.reqs[0][0]; live.last = live.reqs[live.reqs.length - 1][0]
   out.push(live)
+  enrich(out, rng(7))
   return out
+}
+
+// The 0.3 fields: why each request happened and what would have saved it, made up in plausible shares
+const RIDER_FILES = ['src/api/orders.ts', 'package-lock.json', 'test output', 'src/billing/webhooks.ts', 'docs/schema.md', 'build log']
+function enrich(all, r) {
+  for (const s of all) {
+    s.dir = '-home-dev-' + s.cwd.split('/').pop(); s.isFork = s.isAgent && r() < 0.2; s.prompts = 0; s.beats = [0, 0, 0, 0]
+    s.firstCtx = s.isAgent ? 0 : 26000 + Math.floor(r() * 9000)
+    let dried = 0
+    for (const row of s.reqs) {
+      const x = r(), kind = x < 0.12 ? 1 : 2
+      if (kind === 1) s.prompts++
+      const tool = kind === 2 ? TOOLS[Math.floor(r() * r() * 5)] : ''
+      const acted = kind === 2 && (tool === 'Edit' || tool === 'Write') && r() < 0.7
+      dried += kind === 1 ? Math.floor(r() * 9000) : 0
+      const rewrite = kind === 1 && dried ? Math.floor(row[4] * 0.02) : 0
+      row.push(kind, tool, acted ? 1 : 0, acted ? 1 : 0, Math.min(dried, row[4]), rewrite, kind === 1 ? Math.floor(r() * 3) : 0, kind === 2 && row[7] < 400 && r() < 0.08 ? 1 : 0)
+      if (row[11] === 2 && row[18]) row[7] = 30 + Math.floor(r() * 25)
+    }
+    s.riders = s.isAgent ? [] : Array.from({ length: 2 }, () => [4000 + Math.floor(r() * 18000), 20 + Math.floor(r() * 300), r() < 0.6 ? 'Read' : 'Bash', RIDER_FILES[Math.floor(r() * RIDER_FILES.length)]])
+  }
 }
 
 // Plan readings for the demo week: the weekly percent follows the demo's own spend this week
